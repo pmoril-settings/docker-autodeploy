@@ -1,6 +1,6 @@
 #!/bin/sh
 
-function populateFstab() {
+populateFstab() {
 	sudo mkdir /mnt/DATOS
 	sudo mkdir /mnt/DATOS1
 	sudo mkdir /mnt/SSD
@@ -10,7 +10,7 @@ UUID=abce8dd5-ff05-474d-ba08-8d5524ce587d /mnt/DATOS1   ext4 defaults 0 0\
 UUID=20a12e3e-df84-4438-85c7-88b6082dd654 /mnt/SSD      ext4 defaults 0 0' /etc/fstab
 }
 
-function installDocker() {
+installDocker() {
 	sudo apt-get update
 	sudo apt-get install -y \
           apt-transport-https \
@@ -28,13 +28,13 @@ function installDocker() {
         sudo usermod -aG docker $USER
 }
 
-function installKubectl() {
+installKubectl() {
 	curl -LO https://storage.googleapis.com/kubernetes-release/release/`curl -s https://storage.googleapis.com/kubernetes-release/release/stable.txt`/bin/linux/amd64/kubectl
 	sudo chmod +x ./kubectl
 	sudo mv ./kubectl /usr/local/bin/kubectl
 }
 
-function installMinikube() {
+installMinikube() {
 	sudo apt install -y libvirt-clients libvirt-daemon-system qemu-kvm \
   	  && sudo usermod -a -G libvirt $(whoami) \
   	  && newgrp libvirt
@@ -45,7 +45,7 @@ function installMinikube() {
 	minikube config set vm-driver kvm2
 }
 
-function installSamba() {
+installSamba() {
 	sudo apt update
         sudo apt install -y samba
         sudo sed -i '$a \
@@ -59,7 +59,7 @@ function installSamba() {
 	sudo systemctl restart nmbd
 }
 
-function installZSH() {
+installZSH() {
 	sudo apt install -y git zsh
 	sudo rsync -a /opt/docker/compose/scripts/init-files/.oh-my-zsh ~
 	sudo rsync -a /opt/docker/compose/scripts/init-files/.zshrc ~
