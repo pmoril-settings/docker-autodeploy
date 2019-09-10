@@ -70,7 +70,6 @@ installZSH() {
 	sudo rsync -a /opt/docker/compose/scripts/init-files/.zshrc ~
         sudo rsync -a /opt/docker/compose/scripts/init-files/.p10k.zsh ~
         sudo rsync -a /opt/docker/compose/scripts/init-files/.zsh_history ~
-	source ~/.zshrc
 }
 
 echo 'Initial script running...'
