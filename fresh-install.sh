@@ -55,12 +55,12 @@ installSamba() {
         sudo apt install -y samba
         sudo sed -i '$a \
 [NUC]\
-  follow symlinks = yes\
-  wide links = yes\
-  comment = Samba on Ubuntu\
-  path = /mnt/DATOS\
-  read only = no\
-  browsable = yes' /etc/samba/smb.conf
+   follow symlinks = yes\
+   wide links = yes\
+   comment = Samba on Ubuntu\
+   path = /mnt/DATOS\
+   read only = no\
+   browsable = yes' /etc/samba/smb.conf
 	sudo systemctl restart nmbd
 }
 
