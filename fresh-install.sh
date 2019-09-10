@@ -40,6 +40,7 @@ installKubectl() {
 installMinikube() {
 	sudo apt-get install -y libvirt-clients libvirt-daemon-system qemu-kvm
   	sudo usermod -a -G libvirt $(whoami)
+	# TODO: Discover why this line produces an exit
   	# newgrp libvirt
 	curl -LO https://storage.googleapis.com/minikube/releases/latest/docker-machine-driver-kvm2
 	sudo install docker-machine-driver-kvm2 /usr/local/bin/
@@ -68,38 +69,38 @@ installZSH() {
 	sudo rsync -a /opt/docker/compose/scripts/init-files/.zshrc ~
         sudo rsync -a /opt/docker/compose/scripts/init-files/.p10k.zsh ~
         sudo rsync -a /opt/docker/compose/scripts/init-files/.zsh_history ~
-	sudo chsh -s $(which zsh)
+	chsh -s $(which zsh)
 	source ~/.zshrc
 }
 
 echo 'Initial script running...'
 echo 'Populating fstab and mounting drives'
-echo -ne '# (10%)\r'
+echo '# (10%)\r'
 populateFstab && sudo mount -a
-echo -ne '## (20%)\r'
+echo '## (20%)\r'
 echo 'Installing last Docker-CE version'
 installDocker
-echo -ne '### (30%)\r'
+echo '### (30%)\r'
 echo 'Installing Samba'
-echo -ne '#### (40%)\r'
+echo '#### (40%)\r'
 installSamba
-echo -ne '###### (50%)\r'
-echo -ne 'Installing kubectl'
+echo '###### (50%)\r'
+echo 'Installing kubectl'
 installKubectl
-echo -ne '####### (60%)\r'
+echo '####### (60%)\r'
 echo 'Installing minikube'
 installMinikube
-echo -ne '######## (70%)\r'
+echo '######## (70%)\r'
 echo 'Copy docker entire cluster to new installation'
 sudo mkdir /opt/docker
 sudo rsync -a --progress /mnt/SSD/opt/NVME/compose /opt/docker
-echo -ne '######### (80%)\r'
+echo '######### (80%)\r'
 echo 'Deploying docker-compose.yml'
 sh /opt/docker/compose/scripts/docker-update.sh
-echo -ne '##### (90%)\r'
+echo '##### (90%)\r'
 echo 'Installing ZSH and OH MY ZSH'
 installZSH
-echo -ne '########## (100%)\r'
+echo '########## (100%)\r'
 echo 'Done!'
 echo 'Samba user need to be created, use sudo smbpasswd -a USER'
 echo 'Crontab needs to be updated, see crontab-entries file'
