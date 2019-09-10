@@ -39,9 +39,9 @@ installMinikube() {
   	  && sudo usermod -a -G libvirt $(whoami) \
   	  && newgrp libvirt
 	curl -LO https://storage.googleapis.com/minikube/releases/latest/docker-machine-driver-kvm2 \
-	   && sudo install -y docker-machine-driver-kvm2 /usr/local/bin/
+	   && sudo install docker-machine-driver-kvm2 /usr/local/bin/
 	curl -LO https://storage.googleapis.com/minikube/releases/latest/minikube-linux-amd64 \
-	  && sudo install -y minikube-linux-amd64 /usr/local/bin/minikube && rm minikube-linux-amd64
+	  && sudo install minikube-linux-amd64 /usr/local/bin/minikube && rm minikube-linux-amd64
 	minikube config set vm-driver kvm2
 }
 
