@@ -26,7 +26,8 @@ installDocker() {
         sudo apt-get update
         sudo apt-get install -y docker-ce docker-ce-cli containerd.io
         sudo usermod -aG docker $USER
-	su - $USER
+	# TODO: Discover why this line produces an exit
+	# su - $USER
 	sudo curl -L "https://github.com/docker/compose/releases/download/1.24.1/docker-compose-$(uname -s)-$(uname -m)" -o /usr/local/bin/docker-compose
 	sudo chmod +x /usr/local/bin/docker-compose
 }
@@ -69,7 +70,6 @@ installZSH() {
 	sudo rsync -a /opt/docker/compose/scripts/init-files/.zshrc ~
         sudo rsync -a /opt/docker/compose/scripts/init-files/.p10k.zsh ~
         sudo rsync -a /opt/docker/compose/scripts/init-files/.zsh_history ~
-	chsh -s $(which zsh)
 	source ~/.zshrc
 }
 
@@ -104,3 +104,5 @@ echo '########## (100%)\r'
 echo 'Done!'
 echo 'Samba user need to be created, use sudo smbpasswd -a USER'
 echo 'Crontab needs to be updated, see crontab-entries file'
+echo 'You need to logout for docker, after execute sh /opt/docker/compose/scripts/docker-update.sh to deploy the cluster'
+chsh -s $(which zsh)
