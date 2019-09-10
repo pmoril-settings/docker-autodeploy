@@ -104,4 +104,5 @@ echo 'Done!'
 echo 'Samba user need to be created, use sudo smbpasswd -a USER'
 echo 'Crontab needs to be updated, see crontab-entries file'
 echo 'You need to logout for docker, after execute sh /opt/docker/compose/scripts/docker-update.sh to deploy the cluster'
+echo 'Is recommended to restart the system and execute newgrp libvirt if gitlab kubernetes integration is not working'
 chsh -s $(which zsh)
