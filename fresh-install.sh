@@ -6,8 +6,7 @@ populateFstab() {
 	sudo mkdir /mnt/SSD
 	sudo sed -i '$a \
 UUID=68cb4258-c2b8-4c66-84c4-d7a71c86c3c9 /mnt/DATOS    ext4 defaults 0 0\
-UUID=abce8dd5-ff05-474d-ba08-8d5524ce587d /mnt/DATOS1   ext4 defaults 0 0\
-UUID=20a12e3e-df84-4438-85c7-88b6082dd654 /mnt/SSD      ext4 defaults 0 0' /etc/fstab
+UUID=abce8dd5-ff05-474d-ba08-8d5524ce587d /mnt/DATOS1   ext4 defaults 0 0' /etc/fstab
 }
 
 installDocker() {
@@ -92,7 +91,7 @@ installMinikube
 echo '######## (70%)\r'
 echo 'Copy docker entire cluster to new installation'
 sudo mkdir /opt/docker
-sudo rsync -a --progress /mnt/SSD/opt/NVME/compose /opt/docker
+sudo rsync -a --progress /mnt/DATOS1/Backup/NVME/compose /opt/docker
 echo '######### (80%)\r'
 echo 'Deploying docker-compose.yml'
 sh /opt/docker/compose/scripts/docker-update.sh
