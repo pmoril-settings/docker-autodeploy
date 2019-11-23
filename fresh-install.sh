@@ -106,4 +106,4 @@ echo 'Crontab needs to be updated, see crontab-entries file'
 echo 'You need to logout for docker, after execute sh /opt/docker/compose/scripts/docker-update.sh to deploy the cluster'
 echo 'Is recommended to restart the system and execute newgrp libvirt if gitlab kubernetes integration is not working'
 echo 'Once minikube is deployed and a cluster is created, is mandatory to restart minikube/system to make the endpoint visible to gitlab'
-chsh -s $(which zsh)
+sudo chsh -s $(which zsh)
