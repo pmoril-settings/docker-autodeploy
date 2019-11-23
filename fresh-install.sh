@@ -100,11 +100,11 @@ sudo mkdir /opt/docker
 sudo rsync -a --progress /mnt/DATOS1/Backup/NVME/compose /opt/docker
 echo '######### (80%)\r'
 echo 'Deploying docker-compose.yml'
+installPostfix
 sh /opt/docker/compose/scripts/docker-update.sh
 echo '##### (90%)\r'
 echo 'Installing ZSH and OH MY ZSH'
 installZSH
-installPostfix
 sudo chsh -s $(which zsh)
 echo '########## (100%)\r'
 echo 'Done!'
