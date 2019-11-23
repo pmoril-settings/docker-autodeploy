@@ -74,6 +74,8 @@ installPostfix() {
 	DEBIAN_FRONTEND=noninteractive sudo apt-get install -y postfix
 	cd /etc/postfix
 	sudo cp /mnt/DATOS1/Backup/NVME/compose/scripts/init-files/postfix/* .
+	sudo postmap /etc/postfix/sasl_passwd
+	sudo postmap /etc/postfix/generic
 	sudo apt-get install -y mailutils
 }
 
