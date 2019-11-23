@@ -107,6 +107,8 @@ sh /opt/docker/compose/scripts/docker-update.sh
 echo '##### (90%)\r'
 echo 'Installing ZSH and OH MY ZSH'
 installZSH
+echo 'Installing KVM/QEMU'
+sudo apt install -y qemu-kvm virt-manager libguestfs-tools
 sudo chsh -s $(which zsh)
 echo '########## (100%)\r'
 echo 'Done!'
