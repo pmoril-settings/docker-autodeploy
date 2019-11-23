@@ -70,6 +70,13 @@ installZSH() {
         sudo rsync -a /opt/docker/compose/scripts/init-files/.zsh_history ~
 }
 
+installPostfix() {
+	DEBIAN_FRONTEND=noninteractive sudo apt-get install -y postfix
+	cd /etc/postfix
+	sudo cp /mnt/DATOS1/Backup/NVME/compose/scripts/init-files/postfix/* .
+	sudo apt-get install -y mailutils
+}
+
 echo 'Initial script running...'
 echo 'Populating fstab and mounting drives'
 echo '# (10%)\r'
@@ -97,6 +104,8 @@ sh /opt/docker/compose/scripts/docker-update.sh
 echo '##### (90%)\r'
 echo 'Installing ZSH and OH MY ZSH'
 installZSH
+installPostfix
+sudo chsh -s $(which zsh)
 echo '########## (100%)\r'
 echo 'Done!'
 echo '##################### NEXT STEPS ###################'
@@ -106,4 +115,4 @@ echo 'Crontab needs to be updated, see crontab-entries file'
 echo 'You need to logout for docker, after execute sh /opt/docker/compose/scripts/docker-update.sh to deploy the cluster'
 echo 'Is recommended to restart the system and execute newgrp libvirt if gitlab kubernetes integration is not working'
 echo 'Once minikube is deployed and a cluster is created, is mandatory to restart minikube/system to make the endpoint visible to gitlab'
-sudo chsh -s $(which zsh)
+
