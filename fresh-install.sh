@@ -84,8 +84,6 @@ echo 'Populating fstab and mounting drives'
 echo '# (10%)\r'
 populateFstab && sudo mount -a
 echo '## (20%)\r'
-echo 'Installing last Docker-CE version'
-installDocker
 echo '### (30%)\r'
 echo 'Installing Samba'
 echo '#### (40%)\r'
