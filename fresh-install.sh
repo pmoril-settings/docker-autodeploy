@@ -91,8 +91,6 @@ echo 'Installing Samba'
 echo '#### (40%)\r'
 installSamba
 echo '###### (50%)\r'
-echo 'Installing kubectl'
-installKubectl
 echo '####### (60%)\r'
 echo '######## (70%)\r'
 echo 'Copy docker entire cluster to new installation'
