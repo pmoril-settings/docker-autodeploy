@@ -94,8 +94,6 @@ echo '###### (50%)\r'
 echo 'Installing kubectl'
 installKubectl
 echo '####### (60%)\r'
-echo 'Installing minikube'
-installMinikube
 echo '######## (70%)\r'
 echo 'Copy docker entire cluster to new installation'
 sudo mkdir /opt/docker
