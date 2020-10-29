@@ -1,10 +1,8 @@
 #!/bin/sh
 
 populateFstab() {
-	sudo mkdir /mnt/DATOS
 	sudo mkdir /mnt/DATOS1
 	sudo sed -i '$a \
-UUID=68cb4258-c2b8-4c66-84c4-d7a71c86c3c9 /mnt/DATOS    ext4 defaults 0 0\
 UUID=abce8dd5-ff05-474d-ba08-8d5524ce587d /mnt/DATOS1   ext4 defaults 0 0' /etc/fstab
 }
 
@@ -89,6 +87,7 @@ echo 'Installing Samba'
 echo '#### (40%)\r'
 installSamba
 echo '###### (50%)\r'
+installDocker
 echo '####### (60%)\r'
 echo '######## (70%)\r'
 echo 'Copy docker entire cluster to new installation'
