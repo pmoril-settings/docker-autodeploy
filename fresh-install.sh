@@ -4,8 +4,8 @@ populateFstab() {
 	sudo mkdir /mnt/DATOS1
 	sudo sed -i '$a \
 UUID=abce8dd5-ff05-474d-ba08-8d5524ce587d /mnt/DATOS1   ext4 defaults 0 0
-UUID=4911A636-8A3F-4217-ADE7-76D5D599862B /mnt/DATOS    ext4 defaults 0 0
-UUID=25678BCB-46A5-4310-B5C9-A66B905806C0 /mnt/SSD      ext4 defaults 0 0 ' /etc/fstab
+UUID=6eb70ad5-e3e6-4fdd-9815-08703a6fb028 /mnt/DATOS    ext4 defaults 0 0
+UUID=7572de5b-befb-4b46-a9c2-fb08e8a938ee /mnt/SSD      ext4 defaults 0 0 ' /etc/fstab
 }
 
 installDocker() {
@@ -73,7 +73,7 @@ installZSH() {
 installPostfix() {
 	DEBIAN_FRONTEND=noninteractive sudo apt-get install -y postfix
 	cd /etc/postfix
-	sudo cp /mnt/DATOS1/Backup/NVME/compose/scripts/init-files/postfix/* .
+	sudo cp /mnt/SSD/Backup/NVME/compose/scripts/init-files/postfix/* .
 	sudo postmap /etc/postfix/sasl_passwd
 	sudo postmap /etc/postfix/generic
 	sudo apt-get install -y mailutils
@@ -94,7 +94,7 @@ echo '####### (60%)\r'
 echo '######## (70%)\r'
 echo 'Copy docker entire cluster to new installation'
 sudo mkdir /opt/docker
-sudo rsync -a --progress /mnt/DATOS1/Backup/NVME/compose /opt/docker
+sudo rsync -a --progress /mnt/SSD/Backup/NVME/compose /opt/docker
 echo '######### (80%)\r'
 echo 'Deploying docker-compose.yml'
 installPostfix
