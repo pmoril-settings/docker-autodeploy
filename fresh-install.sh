@@ -3,7 +3,9 @@
 populateFstab() {
 	sudo mkdir /mnt/DATOS1
 	sudo sed -i '$a \
-UUID=abce8dd5-ff05-474d-ba08-8d5524ce587d /mnt/DATOS1   ext4 defaults 0 0' /etc/fstab
+UUID=abce8dd5-ff05-474d-ba08-8d5524ce587d /mnt/DATOS1   ext4 defaults 0 0
+UUID=4911A636-8A3F-4217-ADE7-76D5D599862B /mnt/DATOS    ext4 defaults 0 0
+UUID=25678BCB-46A5-4310-B5C9-A66B905806C0 /mnt/SSD      ext4 defaults 0 0 ' /etc/fstab
 }
 
 installDocker() {
