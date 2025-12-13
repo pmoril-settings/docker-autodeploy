@@ -390,8 +390,6 @@ if [ -d "$RESTORE_DEST/services/containers" ]; then
   chmod -R 755 $RESTORE_DEST/services/containers 2>&1 | tee -a $RESTORE_LOG_FILE
   echo "Permissions fixed: owner=$ACTUAL_UID:$ACTUAL_GID, mode=755" | tee -a $RESTORE_LOG_FILE
 fi
-  echo "Permissions fixed: owner=$UID:$GID, mode=755" | tee -a $RESTORE_LOG_FILE
-fi
 
 # Verify critical databases were restored
 echo "Verifying critical files were restored..." | tee -a $RESTORE_LOG_FILE
