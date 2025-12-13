@@ -267,7 +267,7 @@ else
   # Define fstab entries
   FSTAB_ENTRIES=(
     "UUID=abce8dd5-ff05-474d-ba08-8d5524ce587d /mnt/DATOS1   ext4 defaults 0 0"
-    "UUID=0eba4adf-8809-46ce-9c77-2c4a1225d98b /mnt/DATOS    ext4 defaults 0 0"
+    "UUID=c8d82fc0-27f8-4f05-ac2f-e591861e014d /mnt/DATOS    ext4 defaults 0 0"
     "UUID=7572de5b-befb-4b46-a9c2-fb08e8a938ee /mnt/SSD      ext4 defaults 0 0"
   )
   
