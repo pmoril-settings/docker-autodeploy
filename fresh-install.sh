@@ -276,9 +276,48 @@ else
   fi
   
   # Add user to docker group if not already
-  if ! groups $ACTUAL_USER | grep -q '\bdocker\b'; then
-    usermod -aG docker $ACTUAL_USER
-    echo "User $ACTUAL_USER added to docker group" | tee -a $RESTORE_LOG_FILE
+  if ! id $ACTUAL_USER | grep -q '\bdocker\b'; then
+    # For Bazzite/Atomic systems, ensure docker group exists in /etc/group
+    if [ "$SYSTEM_TYPE" = "atomic" ]; then
+      echo "Configuring docker group for atomic system..." | tee -a $RESTORE_LOG_FILE
+      
+      # Check if docker group exists in /etc/group
+      if ! grep -q "^docker:" /etc/group; then
+        # Get the docker GID from the system
+        DOCKER_GID=$(getent group docker | cut -d: -f3)
+        if [ -z "$DOCKER_GID" ]; then
+          DOCKER_GID=955
+        fi
+        echo "docker:x:$DOCKER_GID:$ACTUAL_USER" >> /etc/group
+        echo "Created docker group in /etc/group with user $ACTUAL_USER" | tee -a $RESTORE_LOG_FILE
+      else
+        # Group exists, add user to it
+        sed -i "/^docker:/s/$/,$ACTUAL_USER/" /etc/group
+        sed -i 's/:,/:/' /etc/group  # Clean up if there's a leading comma
+        echo "Added $ACTUAL_USER to existing docker group in /etc/group" | tee -a $RESTORE_LOG_FILE
+      fi
+      
+      # Create docker socket override directory
+      mkdir -p /etc/systemd/system/docker.socket.d
+      
+      # Create override file to set socket permissions
+      cat > /etc/systemd/system/docker.socket.d/override.conf << 'DOCKEREOF'
+[Socket]
+SocketMode=0666
+DOCKEREOF
+      
+      # Reload systemd and restart docker socket
+      systemctl daemon-reload
+      systemctl restart docker.socket
+      systemctl restart docker.service
+      
+      echo "Docker configured for atomic system - socket is now world-writable" | tee -a $RESTORE_LOG_FILE
+      echo "$(tput setaf 3)Note: You can now use docker without sudo, but you may need to logout/login first$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
+    else
+      # Standard systems
+      usermod -aG docker $ACTUAL_USER
+      echo "User $ACTUAL_USER added to docker group" | tee -a $RESTORE_LOG_FILE
+    fi
   fi
 fi
 
