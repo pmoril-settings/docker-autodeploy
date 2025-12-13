@@ -163,6 +163,15 @@ if [ "$SYSTEM_TYPE" = "atomic" ]; then
     fi
   fi
   
+  # Enable Wake-on-LAN for eno1 interface
+  echo "$(tput setaf 3)Configuring Wake-on-LAN...$(tput sgr0)"
+  if nmcli c show "eno1" &> /dev/null; then
+    nmcli c modify "eno1" 802-3-ethernet.wake-on-lan magic
+    echo "Wake-on-LAN enabled for eno1"
+  else
+    echo "$(tput setaf 1)Warning: Network connection 'eno1' not found, skipping WoL configuration$(tput sgr0)"
+  fi
+  
 elif [ "$SYSTEM_TYPE" = "debian" ]; then
   apt install -y curl wget vim nano ca-certificates gnupg lsb-release ethtool
   
