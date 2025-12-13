@@ -242,10 +242,6 @@ if ! command -v docker &> /dev/null; then
 else
   echo "Docker already installed"
   
-  # Make sure Docker is enabled and started
-  systemctl enable docker || true
-  systemctl start docker || true
-  
   # Add user to docker group if not already
   if ! groups $ACTUAL_USER | grep -q '\bdocker\b'; then
     usermod -aG docker $ACTUAL_USER
@@ -333,6 +329,26 @@ fi
 # Make scripts executable
 chmod +x /opt/docker/compose/scripts/*.sh
 
-# Run attic-restore
-echo "$(tput setaf 2)Running attic-restore.sh...$(tput sgr0)"
-bash /opt/docker/compose/scripts/attic-restore.sh
+# Check if user needs to re-login for docker group
+if groups $ACTUAL_USER | grep -q '\bdocker\b'; then
+  # User is in docker group, check if current session has the group active
+  if ! groups | grep -q '\bdocker\b' 2>/dev/null && [ ! -z "$SUDO_USER" ]; then
+    echo ""
+    echo "$(tput setaf 1)IMPORTANT: User added to docker group$(tput sgr0)"
+    echo "$(tput setaf 3)You need to log out and log back in for docker permissions to take effect$(tput sgr0)"
+    echo "$(tput setaf 3)After re-login, run attic-restore.sh manually:$(tput sgr0)"
+    echo "  sudo bash /opt/docker/compose/scripts/attic-restore.sh"
+    echo ""
+    exit 0
+  fi
+fi
+
+# Run attic-restore if it exists
+if [ -f "/opt/docker/compose/scripts/attic-restore.sh" ]; then
+  echo "$(tput setaf 2)Running attic-restore.sh...$(tput sgr0)"
+  chmod +x /opt/docker/compose/scripts/attic-restore.sh
+  bash /opt/docker/compose/scripts/attic-restore.sh
+else
+  echo "$(tput setaf 1)Warning: attic-restore.sh not found at /opt/docker/compose/scripts/$(tput sgr0)"
+  echo "$(tput setaf 3)Please run it manually when available$(tput sgr0)"
+fi
