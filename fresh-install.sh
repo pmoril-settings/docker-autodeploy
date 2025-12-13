@@ -23,18 +23,33 @@
 #     sudo bash /mnt/SSD/Backup/NVME/compose/scripts/fresh-install.sh
 #
 # WHAT IT DOES:
-#   1. Detects system type (Bazzite/Ubuntu/Fedora)
-#   2. Installs essential packages (git, rsync, curl, wget, vim, zsh, etc.)
-#   3. Installs Oh My Zsh
-#   4. Installs Docker CE
+#   1. Detects system type (Bazzite/Fedora Atomic/Ubuntu/Fedora)
+#   2. Installs essential packages (git, rsync, curl, wget, vim, zsh, ethtool, etc.)
+#   3. Installs Oh My Zsh and zsh plugins (zsh-autosuggestions, zsh-syntax-highlighting)
+#   4. Installs Docker CE and adds user to docker group
 #   5. Configures fstab entries and mounts disks (DATOS1, DATOS, SSD)
-#   6. Copies repository from backup to /opt/docker/compose
-#   7. Runs attic-restore.sh to restore all services and data
+#   6. Copies repository from backup to /opt/docker/compose (if not exists) or pulls updates
+#   7. Restores system configuration files (.zshrc, .zsh_history, .oh-my-zsh)
+#   8. Configures git user (email and name) for the actual user
+#   9. Generates SSH key for Gitea and configures SSH config
+#   10. Initializes Git repository with remote origin
+#   11. Starts docker-compose services (excluding enshrouded and palworld)
 #
-# NOTES FOR BAZZITE:
-#   - First run will install packages and may require a reboot
+# IDEMPOTENCY:
+#   - Script can be run multiple times safely
+#   - Only installs/configures what is missing
+#   - Skips already completed steps
+#   - Useful for resuming after interruptions or reboots
+#
+# NOTES FOR BAZZITE/FEDORA ATOMIC:
+#   - First run will install packages and REQUIRES a reboot
 #   - After reboot, run this script again to continue
 #   - Docker installation requires a reboot to take effect
+#   - System uses rpm-ostree (immutable filesystem)
+#
+# LOGS:
+#   - Logs are saved to: /home/<user>/temp/logs/fresh-install-<date>.log
+#   - Old logs (>20 days) are automatically cleaned up
 #
 # Check if running as root
 if [ "$EUID" -ne 0 ]; then
@@ -46,7 +61,18 @@ fi
 ACTUAL_USER=${SUDO_USER:-$USER}
 ACTUAL_HOME=$(eval echo ~$ACTUAL_USER)
 
-echo "$(tput setaf 3)Bootstrap: Starting setup process...$(tput sgr0)"
+# Define log variables
+LOG_FOLDER=/home/$ACTUAL_USER/temp/logs
+LOG_DATE=$(date +'%m%d%Y')
+RESTORE_LOG_FILENAME=fresh-install-$LOG_DATE.log
+RESTORE_LOG_FILE="$LOG_FOLDER/$RESTORE_LOG_FILENAME"
+RESTORE_DEST=/opt/docker/compose
+
+# Create log folder
+[ -d $LOG_FOLDER ] || mkdir -p $LOG_FOLDER
+chown -R $ACTUAL_USER:$ACTUAL_USER $LOG_FOLDER
+
+echo "$(tput setaf 3)Bootstrap: Starting setup process...$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
 
 # Detect package manager and install essential packages
 if command -v rpm-ostree &> /dev/null; then
@@ -240,12 +266,19 @@ if ! command -v docker &> /dev/null; then
     echo "Docker installed and enabled"
   fi
 else
-  echo "Docker already installed"
+  echo "Docker already installed" | tee -a $RESTORE_LOG_FILE
+  
+  # Ensure Docker service is running
+  if ! systemctl is-active --quiet docker; then
+    echo "Starting Docker service..." | tee -a $RESTORE_LOG_FILE
+    systemctl start docker
+    systemctl enable docker
+  fi
   
   # Add user to docker group if not already
   if ! groups $ACTUAL_USER | grep -q '\bdocker\b'; then
     usermod -aG docker $ACTUAL_USER
-    echo "User $ACTUAL_USER added to docker group"
+    echo "User $ACTUAL_USER added to docker group" | tee -a $RESTORE_LOG_FILE
   fi
 fi
 
@@ -343,12 +376,206 @@ if groups $ACTUAL_USER | grep -q '\bdocker\b'; then
   fi
 fi
 
-# Run attic-restore if it exists
-if [ -f "/opt/docker/compose/scripts/attic-restore.sh" ]; then
-  echo "$(tput setaf 2)Running attic-restore.sh...$(tput sgr0)"
-  chmod +x /opt/docker/compose/scripts/attic-restore.sh
-  bash /opt/docker/compose/scripts/attic-restore.sh
-else
-  echo "$(tput setaf 1)Warning: attic-restore.sh not found at /opt/docker/compose/scripts/$(tput sgr0)"
-  echo "$(tput setaf 3)Please run it manually when available$(tput sgr0)"
+# Verify .env files were restored
+ENV_COUNT_BACKUP=$(find /mnt/SSD/Backup/NVME/compose -name ".env" -type f | wc -l)
+ENV_COUNT_RESTORED=$(find /opt/docker/compose -name ".env" -type f 2>/dev/null | wc -l)
+echo "✓ .env files restored: $ENV_COUNT_RESTORED / $ENV_COUNT_BACKUP" | tee -a $RESTORE_LOG_FILE
+
+# Fix permissions for container directories
+echo "Fixing permissions for container directories..." | tee -a $RESTORE_LOG_FILE
+if [ -d "$RESTORE_DEST/services/containers" ]; then
+  ACTUAL_UID=$(id -u $ACTUAL_USER)
+  ACTUAL_GID=$(id -g $ACTUAL_USER)
+  chown -R $ACTUAL_UID:$ACTUAL_GID $RESTORE_DEST/services/containers 2>&1 | tee -a $RESTORE_LOG_FILE
+  chmod -R 755 $RESTORE_DEST/services/containers 2>&1 | tee -a $RESTORE_LOG_FILE
+  echo "Permissions fixed: owner=$ACTUAL_UID:$ACTUAL_GID, mode=755" | tee -a $RESTORE_LOG_FILE
 fi
+  echo "Permissions fixed: owner=$UID:$GID, mode=755" | tee -a $RESTORE_LOG_FILE
+fi
+
+# Verify critical databases were restored
+echo "Verifying critical files were restored..." | tee -a $RESTORE_LOG_FILE
+for db_path in "services/containers/sonarr/config/sonarr.db" "services/containers/radarr/config/radarr.db" "services/containers/plex/config/Library"; do
+  if [ -e "$RESTORE_DEST/$db_path" ]; then
+    echo "✓ Found: $db_path" | tee -a $RESTORE_LOG_FILE
+  else
+    echo "⚠ Missing: $db_path" | tee -a $RESTORE_LOG_FILE
+  fi
+done
+
+echo "###(DONE) Restore complete compose folder###" | tee -a $RESTORE_LOG_FILE
+
+echo "###(IN PROGRESS) Restore system configuration files###" | tee -a $RESTORE_LOG_FILE
+echo "$(tput setaf 2)Restoring system configuration files$(tput sgr0)"
+
+# Restore .oh-my-zsh directory first (if exists in backup)
+if [ -d "/mnt/SSD/Backup/NVME/compose/scripts/server-utils/.oh-my-zsh" ]; then
+  echo "$(tput setaf 3)Restoring .oh-my-zsh directory...$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
+  rsync -a --out-format="%n" /mnt/SSD/Backup/NVME/compose/scripts/server-utils/.oh-my-zsh/ $ACTUAL_HOME/.oh-my-zsh/ 2>&1 | tee -a $RESTORE_LOG_FILE
+  chown -R $ACTUAL_USER:$ACTUAL_USER $ACTUAL_HOME/.oh-my-zsh
+  echo ".oh-my-zsh directory restored for $ACTUAL_USER" | tee -a $RESTORE_LOG_FILE
+else
+  echo "Warning: .oh-my-zsh not found in backup, will install plugins manually" | tee -a $RESTORE_LOG_FILE
+fi
+
+# Restore .zshrc for user
+if [ -f "/mnt/SSD/Backup/NVME/compose/scripts/server-utils/.zshrc" ]; then
+  cp /mnt/SSD/Backup/NVME/compose/scripts/server-utils/.zshrc $ACTUAL_HOME/.zshrc 2>&1 | tee -a $RESTORE_LOG_FILE
+  chown $ACTUAL_USER:$ACTUAL_USER $ACTUAL_HOME/.zshrc
+  echo ".zshrc restored for $ACTUAL_USER" | tee -a $RESTORE_LOG_FILE
+else
+  echo "Warning: .zshrc not found in backup" | tee -a $RESTORE_LOG_FILE
+fi
+
+# Restore .zsh_history for user
+if [ -f "/mnt/SSD/Backup/NVME/compose/scripts/server-utils/.zsh_history" ]; then
+  cp /mnt/SSD/Backup/NVME/compose/scripts/server-utils/.zsh_history $ACTUAL_HOME/.zsh_history 2>&1 | tee -a $RESTORE_LOG_FILE
+  chown $ACTUAL_USER:$ACTUAL_USER $ACTUAL_HOME/.zsh_history
+  echo ".zsh_history restored for $ACTUAL_USER" | tee -a $RESTORE_LOG_FILE
+else
+  echo "Warning: .zsh_history not found in backup" | tee -a $RESTORE_LOG_FILE
+fi
+
+# Install zsh plugins if Oh My Zsh is present but plugins are missing
+if [ -d "$ACTUAL_HOME/.oh-my-zsh" ]; then
+  echo "$(tput setaf 3)Checking zsh plugins...$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
+  
+  # Install zsh-autosuggestions
+  if [ ! -d "$ACTUAL_HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions" ]; then
+    echo "Installing zsh-autosuggestions..." | tee -a $RESTORE_LOG_FILE
+    git clone https://github.com/zsh-users/zsh-autosuggestions $ACTUAL_HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions 2>&1 | tee -a $RESTORE_LOG_FILE
+    chown -R $ACTUAL_USER:$ACTUAL_USER $ACTUAL_HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions
+    echo "zsh-autosuggestions installed" | tee -a $RESTORE_LOG_FILE
+  else
+    echo "zsh-autosuggestions already present" | tee -a $RESTORE_LOG_FILE
+  fi
+  
+  # Install zsh-syntax-highlighting
+  if [ ! -d "$ACTUAL_HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting" ]; then
+    echo "Installing zsh-syntax-highlighting..." | tee -a $RESTORE_LOG_FILE
+    git clone https://github.com/zsh-users/zsh-syntax-highlighting.git $ACTUAL_HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting 2>&1 | tee -a $RESTORE_LOG_FILE
+    chown -R $ACTUAL_USER:$ACTUAL_USER $ACTUAL_HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
+    echo "zsh-syntax-highlighting installed" | tee -a $RESTORE_LOG_FILE
+  else
+    echo "zsh-syntax-highlighting already present" | tee -a $RESTORE_LOG_FILE
+  fi
+fi
+
+# Change default shell to zsh if not already set
+CURRENT_SHELL=$(getent passwd $ACTUAL_USER | cut -d: -f7)
+if [ "$CURRENT_SHELL" != "/usr/bin/zsh" ] && [ "$CURRENT_SHELL" != "/bin/zsh" ]; then
+  echo "$(tput setaf 3)Changing default shell to zsh for $ACTUAL_USER...$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
+  usermod -s /usr/bin/zsh $ACTUAL_USER 2>&1 | tee -a $RESTORE_LOG_FILE
+  if [ $? -eq 0 ]; then
+    echo "Default shell changed to zsh for $ACTUAL_USER" | tee -a $RESTORE_LOG_FILE
+  else
+    echo "Warning: Failed to change default shell to zsh" | tee -a $RESTORE_LOG_FILE
+  fi
+else
+  echo "Default shell is already zsh for $ACTUAL_USER" | tee -a $RESTORE_LOG_FILE
+fi
+
+echo "###(DONE) Restore system configuration files###" | tee -a $RESTORE_LOG_FILE
+
+echo "###(IN PROGRESS) Configure Git###" | tee -a $RESTORE_LOG_FILE
+echo "$(tput setaf 2)Configuring Git user information$(tput sgr0)"
+sudo -u $ACTUAL_USER git config --global user.email "premorion@gmail.com" 2>&1 | tee -a $RESTORE_LOG_FILE
+sudo -u $ACTUAL_USER git config --global user.name "Pedro MP" 2>&1 | tee -a $RESTORE_LOG_FILE
+echo "Git configured with user: Pedro MP <premorion@gmail.com>" | tee -a $RESTORE_LOG_FILE
+echo "###(DONE) Configure Git###" | tee -a $RESTORE_LOG_FILE
+
+echo "###(IN PROGRESS) Setup SSH key and clone repository###" | tee -a $RESTORE_LOG_FILE
+echo "$(tput setaf 2)Setting up SSH key for git repository$(tput sgr0)"
+
+# Generate SSH key if it doesn't exist
+SSH_KEY_PATH="$ACTUAL_HOME/.ssh/id_ed25519_gitea"
+if [ ! -f "$SSH_KEY_PATH" ]; then
+  echo "Generating SSH key for Gitea repository..." | tee -a $RESTORE_LOG_FILE
+  sudo -u $ACTUAL_USER ssh-keygen -t ed25519 -f "$SSH_KEY_PATH" -N "" -C "gitea-atticserver" 2>&1 | tee -a $RESTORE_LOG_FILE
+  echo "SSH key generated at $SSH_KEY_PATH" | tee -a $RESTORE_LOG_FILE
+else
+  echo "SSH key already exists at $SSH_KEY_PATH" | tee -a $RESTORE_LOG_FILE
+fi
+
+# Display the public key
+echo "" | tee -a $RESTORE_LOG_FILE
+echo "$(tput setaf 3)========================================$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
+echo "$(tput setaf 3)SSH Public Key:$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
+echo "$(tput setaf 6)$(cat ${SSH_KEY_PATH}.pub)$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
+echo "$(tput setaf 3)========================================$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
+echo "" | tee -a $RESTORE_LOG_FILE
+echo "$(tput setaf 3)Please add this SSH key to your Gitea repository at:$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
+echo "$(tput setaf 6)http://192.168.2.102:222/user/settings/keys$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
+echo "" | tee -a $RESTORE_LOG_FILE
+
+# Wait for user confirmation
+read -p "$(tput setaf 3)Press ENTER once you have added the SSH key to Gitea...$(tput sgr0) " -r
+
+# Configure SSH for custom port and known host
+mkdir -p "$ACTUAL_HOME/.ssh"
+SSH_CONFIG="$ACTUAL_HOME/.ssh/config"
+
+# Add SSH config for Gitea if not already present
+if ! grep -q "Host gitea-atticserver" "$SSH_CONFIG" 2>/dev/null; then
+  echo "Configuring SSH for Gitea repository..." | tee -a $RESTORE_LOG_FILE
+  cat >> "$SSH_CONFIG" << 'EOF'
+
+Host gitea-atticserver
+    HostName 192.168.2.102
+    Port 222
+    User git
+    IdentityFile ~/.ssh/id_ed25519_gitea
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+EOF
+  chown $ACTUAL_USER:$ACTUAL_USER "$SSH_CONFIG"
+  chmod 600 "$SSH_CONFIG"
+  echo "SSH config updated" | tee -a $RESTORE_LOG_FILE
+fi
+
+# Initialize Git repository if copied from backup
+if [ -d "/opt/docker/compose/.git" ]; then
+  echo "$(tput setaf 3)Initializing Git repository...$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
+  cd /opt/docker/compose
+  
+  # Remove remote if it exists and re-add it
+  sudo -u $ACTUAL_USER git remote remove origin 2>/dev/null || true
+  sudo -u $ACTUAL_USER git remote add origin ssh://gitea-atticserver/premorion/atticserver-docker-compose.git 2>&1 | tee -a $RESTORE_LOG_FILE
+  
+  echo "Git repository initialized" | tee -a $RESTORE_LOG_FILE
+fi
+
+echo "###(DONE) Setup SSH key and clone repository###" | tee -a $RESTORE_LOG_FILE
+
+# Ensure Docker is running before starting containers
+if ! systemctl is-active --quiet docker; then
+  echo "$(tput setaf 1)Docker service is not running. Starting it now...$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
+  systemctl start docker
+  sleep 5
+fi
+
+echo "$(tput setaf 2)Starting containers from docker-compose services$(tput sgr0)"
+echo "###(IN PROGRESS) Start containers - docker-compose up###" | tee -a $RESTORE_LOG_FILE
+cd /opt/docker/compose
+
+if [ -f "docker-compose.yml" ]; then
+  docker compose -f docker-compose.yml up -d --remove-orphans 2>&1 | tee -a $RESTORE_LOG_FILE
+  docker compose stop enshrouded palworld 2>&1 | tee -a $RESTORE_LOG_FILE
+  echo "###(DONE) Start containers - docker-compose up###" | tee -a $RESTORE_LOG_FILE
+else
+  echo "$(tput setaf 1)Error: docker-compose.yml not found$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
+  exit 1
+fi
+
+echo ""
+echo "$(tput setaf 2)========================================$(tput sgr0)"
+echo "$(tput setaf 2)Fresh installation completed successfully!$(tput sgr0)"
+echo "$(tput setaf 2)========================================$(tput sgr0)"
+echo "" 
+echo "Logs saved to: $RESTORE_LOG_FILE"
+echo ""
+echo "$(tput setaf 3)IMPORTANT:$(tput sgr0)"
+echo "- If you were added to the docker group, you may need to log out and back in"
+echo "- Check the containers are running: docker ps"
+echo "- Review logs if needed: $RESTORE_LOG_FILE"
+echo ""
