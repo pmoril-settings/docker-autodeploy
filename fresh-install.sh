@@ -6,30 +6,30 @@
 #   This script must be run with sudo on a fresh system installation
 #
 # PREREQUISITES:
-#   - Backup drive with repository at /mnt/SSD/Backup/NVME/compose (will be auto-detected)
-#   - OR the backup drive mounted manually before running
+#   - Backup drive with repository at /mnt/SSD/Backup/NVME/compose
+#   - Disk UUIDs configured in the script matching your system
 #
 # EXECUTION:
 #   Method 1 - Download and execute from GitHub (recommended for fresh installs):
-#     curl -fsSL https://raw.githubusercontent.com/premorion/atticserver-docker-compose/main/scripts/bootstrap.sh | sudo bash
+#     curl -fsSL https://raw.githubusercontent.com/premorion/atticserver-docker-compose/main/scripts/fresh-install.sh | sudo bash
 #     
 #     # Or using wget:
-#     wget -qO- https://raw.githubusercontent.com/premorion/atticserver-docker-compose/main/scripts/bootstrap.sh | sudo bash
+#     wget -qO- https://raw.githubusercontent.com/premorion/atticserver-docker-compose/main/scripts/fresh-install.sh | sudo bash
 #
 #   Method 2 - Direct execution (if you have the script locally):
-#     sudo bash bootstrap.sh
+#     sudo bash fresh-install.sh
 #
 #   Method 3 - From backup drive (if already mounted):
-#     sudo bash /mnt/SSD/Backup/NVME/compose/scripts/bootstrap.sh
+#     sudo bash /mnt/SSD/Backup/NVME/compose/scripts/fresh-install.sh
 #
 # WHAT IT DOES:
 #   1. Detects system type (Bazzite/Ubuntu/Fedora)
 #   2. Installs essential packages (git, rsync, curl, wget, vim, zsh, etc.)
 #   3. Installs Oh My Zsh
 #   4. Installs Docker CE
-#   5. Searches for and mounts backup drive automatically
+#   5. Configures fstab entries and mounts disks (DATOS1, DATOS, SSD)
 #   6. Copies repository from backup to /opt/docker/compose
-#   7. Runs cluster-restore.sh to restore all services and data
+#   7. Runs attic-restore.sh to restore all services and data
 #
 # NOTES FOR BAZZITE:
 #   - First run will install packages and may require a reboot
@@ -265,114 +265,20 @@ if [ -d "/opt/docker/compose/.git" ]; then
 else
   echo "$(tput setaf 2)Repository not found. Starting recovery process...$(tput sgr0)"
   
-  # Step 1: Try to mount backup drive using fstab from a temporary location
-  TEMP_FSTAB="/tmp/fstab.backup"
+  # Step 1: Configure fstab and mount disks
+  echo "$(tput setaf 3)Configuring disk mounts...$(tput sgr0)"
   
-  # Check if we can access any backup location to get fstab
-  if [ -f "/mnt/SSD/Backup/NVME/compose/scripts/server-utils/fstab" ]; then
-    FSTAB_SOURCE="/mnt/SSD/Backup/NVME/compose/scripts/server-utils/fstab"
-  else
-    echo "$(tput setaf 3)Backup drive not mounted. Attempting to mount...$(tput sgr0)"
-    
-    # Try to find and mount the SSD backup drive
-    # First, check if UUID is in current fstab
-    if grep -q "/mnt/SSD" /etc/fstab 2>/dev/null; then
-      echo "$(tput setaf 2)Found SSD entry in /etc/fstab, attempting to mount...$(tput sgr0)"
-      mkdir -p /mnt/SSD
-      mount /mnt/SSD 2>/dev/null || true
-    else
-      # Try to find the backup drive by looking for the backup directory structure
-      echo "$(tput setaf 3)Searching for backup drive...$(tput sgr0)"
-      
-      BACKUP_FOUND=false
-      
-      # List all block devices and try to find the one with the backup
-      for device in $(lsblk -nrpo NAME,TYPE | awk '$2=="part" {print $1}'); do
-        # Skip if already mounted
-        if mountpoint -q /mnt/SSD 2>/dev/null; then
-          break
-        fi
-        
-        echo "Checking $device..."
-        
-        # Try to mount temporarily
-        mkdir -p /mnt/temp_check
-        if mount -o ro "$device" /mnt/temp_check 2>/dev/null; then
-          # Check if this has the backup structure
-          if [ -d "/mnt/temp_check/Backup/NVME/compose" ]; then
-            echo "$(tput setaf 2)Found backup on $device$(tput sgr0)"
-            
-            # Get UUID of this device
-            DEVICE_UUID=$(blkid -s UUID -o value "$device")
-            
-            if [ ! -z "$DEVICE_UUID" ]; then
-              echo "Device UUID: $DEVICE_UUID"
-              
-              # Unmount temporary mount
-              umount /mnt/temp_check
-              
-              # Mount to proper location
-              mkdir -p /mnt/SSD
-              mount UUID="$DEVICE_UUID" /mnt/SSD
-              
-              if [ $? -eq 0 ]; then
-                echo "$(tput setaf 2)Successfully mounted backup drive to /mnt/SSD$(tput sgr0)"
-                
-                # Add to fstab for future boots
-                if ! grep -q "UUID=$DEVICE_UUID" /etc/fstab 2>/dev/null; then
-                  FSTYPE=$(blkid -s TYPE -o value "$device")
-                  echo "UUID=$DEVICE_UUID /mnt/SSD $FSTYPE defaults 0 2" >> /etc/fstab
-                  echo "Added backup drive to /etc/fstab"
-                fi
-                
-                BACKUP_FOUND=true
-                break
-              fi
-            else
-              umount /mnt/temp_check
-            fi
-          else
-            umount /mnt/temp_check
-          fi
-        fi
-      done
-      
-      # Clean up temp directory
-      rmdir /mnt/temp_check 2>/dev/null || true
-      
-      if [ "$BACKUP_FOUND" = false ]; then
-        echo "$(tput setaf 1)Error: Cannot find backup drive automatically$(tput sgr0)"
-        echo "$(tput setaf 3)Please manually mount the backup drive at /mnt/SSD and run this script again$(tput sgr0)"
-        echo ""
-        echo "Available block devices:"
-        lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,LABEL,UUID
-        echo ""
-        echo "Example commands:"
-        echo "  sudo mkdir -p /mnt/SSD"
-        echo "  sudo mount /dev/sdX /mnt/SSD  # Replace sdX with your backup drive"
-        echo "  # Or use UUID:"
-        echo "  sudo mount UUID=your-uuid-here /mnt/SSD"
-        exit 1
-      fi
-    fi
-    
-    # Check again if backup is now accessible
-    if [ ! -f "/mnt/SSD/Backup/NVME/compose/scripts/server-utils/fstab" ]; then
-      echo "$(tput setaf 1)Error: Backup not accessible at /mnt/SSD/Backup/NVME/compose$(tput sgr0)"
-      echo "$(tput setaf 3)Please verify the backup drive is mounted correctly$(tput sgr0)"
-      exit 1
-    fi
-    
-    FSTAB_SOURCE="/mnt/SSD/Backup/NVME/compose/scripts/server-utils/fstab"
-  fi
+  # Define fstab entries
+  FSTAB_ENTRIES=(
+    "UUID=abce8dd5-ff05-474d-ba08-8d5524ce587d /mnt/DATOS1   ext4 defaults 0 0"
+    "UUID=0eba4adf-8809-46ce-9c77-2c4a1225d98b /mnt/DATOS    ext4 defaults 0 0"
+    "UUID=7572de5b-befb-4b46-a9c2-fb08e8a938ee /mnt/SSD      ext4 defaults 0 0"
+  )
   
-  # Step 2: Process fstab to create mount points and mount drives
-  echo "$(tput setaf 2)Processing fstab and mounting drives...$(tput sgr0)"
+  # Step 2: Process fstab entries to create mount points and mount drives
+  echo "$(tput setaf 2)Processing fstab entries and mounting drives...$(tput sgr0)"
   
-  while IFS= read -r line || [ -n "$line" ]; do
-    # Skip empty lines and comments
-    [[ -z "$line" || "$line" =~ ^# ]] && continue
-    
+  for line in "${FSTAB_ENTRIES[@]}"; do
     # Extract mount point (second field)
     mount_point=$(echo "$line" | awk '{print $2}')
     
@@ -391,13 +297,23 @@ else
         echo "Added to fstab: $line"
       fi
     fi
-  done < "$FSTAB_SOURCE"
+  done
   
   # Reload and mount all filesystems
   systemctl daemon-reload
   mount -a
   
   echo "$(tput setaf 2)Filesystems mounted$(tput sgr0)"
+  
+  # Verify backup is accessible
+  if [ ! -d "/mnt/SSD/Backup/NVME/compose" ]; then
+    echo "$(tput setaf 1)Error: Backup not accessible at /mnt/SSD/Backup/NVME/compose$(tput sgr0)"
+    echo "$(tput setaf 3)Please verify the backup drive is mounted correctly$(tput sgr0)"
+    echo ""
+    echo "Available block devices:"
+    lsblk -o NAME,SIZE,TYPE,MOUNTPOINT,LABEL,UUID
+    exit 1
+  fi
   
   # Step 3: Copy repository from backup
   if [ -d "/mnt/SSD/Backup/NVME/compose" ]; then
@@ -417,6 +333,6 @@ fi
 # Make scripts executable
 chmod +x /opt/docker/compose/scripts/*.sh
 
-# Run cluster-restore
-echo "$(tput setaf 2)Running cluster-restore.sh...$(tput sgr0)"
-bash /opt/docker/compose/scripts/cluster-restore.sh
+# Run attic-restore
+echo "$(tput setaf 2)Running attic-restore.sh...$(tput sgr0)"
+bash /opt/docker/compose/scripts/attic-restore.sh
