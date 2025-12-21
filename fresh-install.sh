@@ -24,16 +24,16 @@
 #
 # WHAT IT DOES:
 #   1. Detects system type (Bazzite/Fedora Atomic/Ubuntu/Fedora)
-#   2. Installs essential packages (git, rsync, curl, wget, vim, zsh, ethtool, etc.)
-#   3. Installs Oh My Zsh and zsh plugins (zsh-autosuggestions, zsh-syntax-highlighting)
-#   4. Installs Docker CE and adds user to docker group
-#   5. Configures fstab entries and mounts disks (DATOS1, DATOS, SSD)
-#   6. Copies repository from backup to /opt/docker/compose (if not exists) or pulls updates
-#   7. Restores system configuration files (.zshrc, .zsh_history, .oh-my-zsh)
-#   8. Configures git user (email and name) for the actual user
-#   9. Generates SSH key for Gitea and configures SSH config
-#   10. Initializes Git repository with remote origin
-#   11. Starts docker-compose services (excluding enshrouded and palworld)
+#   2. Installs essential packages (git, rsync, curl, wget, vim, ethtool, etc.)
+#   3. Installs Docker CE and adds user to docker group
+#   4. Configures fstab entries and mounts disks (DATOS1, DATOS, SSD)
+#   5. Copies repository from backup to /opt/docker/compose (if not exists) or pulls updates
+#   6. Restores system configuration files (.zshrc, .zsh_history, .oh-my-zsh)
+#   7. Configures git user (email and name) for the actual user
+#   8. Generates SSH key for Gitea and configures SSH config
+#   9. Initializes Git repository with remote origin
+#   10. Starts docker-compose services (excluding enshrouded and palworld)
+#   11. Recommends running setup-zsh.sh for shell configuration
 #
 # IDEMPOTENCY:
 #   - Script can be run multiple times safely
@@ -142,7 +142,7 @@ if [ "$SYSTEM_TYPE" = "atomic" ]; then
   # Check if packages need to be installed
   PACKAGES_NEEDED=()
   
-  for pkg in curl wget vim ethtool zsh; do
+  for pkg in curl wget vim ethtool; do
     if ! command -v $pkg &> /dev/null 2>&1 && ! rpm -q $pkg &> /dev/null 2>&1; then
       PACKAGES_NEEDED+=($pkg)
     fi
@@ -175,29 +175,12 @@ if [ "$SYSTEM_TYPE" = "atomic" ]; then
 elif [ "$SYSTEM_TYPE" = "debian" ]; then
   apt install -y curl wget vim nano ca-certificates gnupg lsb-release ethtool
   
-  # Install zsh
-  if ! command -v zsh &> /dev/null; then
-    apt install -y zsh
-    chsh -s $(which zsh) $ACTUAL_USER
-    echo "zsh installed and set as default shell"
-  fi
-  
 elif [ "$SYSTEM_TYPE" = "fedora" ]; then
-  dnf install -y curl wget vim nano ca-certificates gnupg ethtool zsh
-  
-  # Set zsh as default shell
-  if command -v zsh &> /dev/null; then
-    chsh -s $(which zsh) $ACTUAL_USER
-    echo "zsh set as default shell"
-  fi
+  dnf install -y curl wget vim nano ca-certificates gnupg ethtool
 fi
 
-# Install Oh My Zsh if not present
-if [ ! -d "$ACTUAL_HOME/.oh-my-zsh" ]; then
-  echo "$(tput setaf 3)Installing Oh My Zsh...$(tput sgr0)"
-  su - $ACTUAL_USER -c 'sh -c "$(curl -fsSL https://raw.githubusercontent.com/ohmyzsh/ohmyzsh/master/tools/install.sh)" "" --unattended'
-  echo "Oh My Zsh installed"
-fi
+echo "$(tput setaf 2)System dependencies installed$(tput sgr0)"
+
 
 # Install Docker if not present
 if ! command -v docker &> /dev/null; then
@@ -482,45 +465,6 @@ else
   echo "Warning: .zsh_history not found in backup" | tee -a $RESTORE_LOG_FILE
 fi
 
-# Install zsh plugins if Oh My Zsh is present but plugins are missing
-if [ -d "$ACTUAL_HOME/.oh-my-zsh" ]; then
-  echo "$(tput setaf 3)Checking zsh plugins...$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
-  
-  # Install zsh-autosuggestions
-  if [ ! -d "$ACTUAL_HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions" ]; then
-    echo "Installing zsh-autosuggestions..." | tee -a $RESTORE_LOG_FILE
-    git clone https://github.com/zsh-users/zsh-autosuggestions $ACTUAL_HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions 2>&1 | tee -a $RESTORE_LOG_FILE
-    chown -R $ACTUAL_USER:$ACTUAL_USER $ACTUAL_HOME/.oh-my-zsh/custom/plugins/zsh-autosuggestions
-    echo "zsh-autosuggestions installed" | tee -a $RESTORE_LOG_FILE
-  else
-    echo "zsh-autosuggestions already present" | tee -a $RESTORE_LOG_FILE
-  fi
-  
-  # Install zsh-syntax-highlighting
-  if [ ! -d "$ACTUAL_HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting" ]; then
-    echo "Installing zsh-syntax-highlighting..." | tee -a $RESTORE_LOG_FILE
-    git clone https://github.com/zsh-users/zsh-syntax-highlighting.git $ACTUAL_HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting 2>&1 | tee -a $RESTORE_LOG_FILE
-    chown -R $ACTUAL_USER:$ACTUAL_USER $ACTUAL_HOME/.oh-my-zsh/custom/plugins/zsh-syntax-highlighting
-    echo "zsh-syntax-highlighting installed" | tee -a $RESTORE_LOG_FILE
-  else
-    echo "zsh-syntax-highlighting already present" | tee -a $RESTORE_LOG_FILE
-  fi
-fi
-
-# Change default shell to zsh if not already set
-CURRENT_SHELL=$(getent passwd $ACTUAL_USER | cut -d: -f7)
-if [ "$CURRENT_SHELL" != "/usr/bin/zsh" ] && [ "$CURRENT_SHELL" != "/bin/zsh" ]; then
-  echo "$(tput setaf 3)Changing default shell to zsh for $ACTUAL_USER...$(tput sgr0)" | tee -a $RESTORE_LOG_FILE
-  usermod -s /usr/bin/zsh $ACTUAL_USER 2>&1 | tee -a $RESTORE_LOG_FILE
-  if [ $? -eq 0 ]; then
-    echo "Default shell changed to zsh for $ACTUAL_USER" | tee -a $RESTORE_LOG_FILE
-  else
-    echo "Warning: Failed to change default shell to zsh" | tee -a $RESTORE_LOG_FILE
-  fi
-else
-  echo "Default shell is already zsh for $ACTUAL_USER" | tee -a $RESTORE_LOG_FILE
-fi
-
 echo "###(DONE) Restore system configuration files###" | tee -a $RESTORE_LOG_FILE
 
 echo "###(IN PROGRESS) Configure Git###" | tee -a $RESTORE_LOG_FILE
@@ -624,4 +568,15 @@ echo "$(tput setaf 3)IMPORTANT:$(tput sgr0)"
 echo "- If you were added to the docker group, you may need to log out and back in"
 echo "- Check the containers are running: docker ps"
 echo "- Review logs if needed: $RESTORE_LOG_FILE"
+echo ""
+echo "$(tput setaf 3)RECOMMENDED NEXT STEP:$(tput sgr0)"
+echo "$(tput setaf 6)Configure your shell environment with zsh, Oh My Zsh, and modern CLI tools:$(tput sgr0)"
+SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+if [ -f "$SCRIPT_DIR/setup-zsh.sh" ]; then
+  echo "  sudo bash $SCRIPT_DIR/setup-zsh.sh"
+else
+  echo "  sudo bash setup-zsh.sh"
+fi
+echo ""
+echo "$(tput setaf 6)This will install: zsh, Oh My Zsh, plugins, LSD, fzf, tldr, and Atuin$(tput sgr0)"
 echo ""
