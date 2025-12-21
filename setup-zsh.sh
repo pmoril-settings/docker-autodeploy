@@ -3,14 +3,16 @@
 # Standalone Zsh Setup Script
 # 
 # DESCRIPTION:
-#   Installs and configures zsh with Oh My Zsh, plugins, LSD, and Atuin
+#   Installs and configures zsh with Oh My Zsh, plugins, LSD, fzf, tldr, and Atuin
 #   Can be run on any system independently
+#   Supports: Linux (Bazzite/Atomic, Debian/Ubuntu, Fedora) and macOS
 #
 # USAGE:
-#   sudo bash setup-zsh.sh
+#   sudo bash setup-zsh.sh    # Linux
+#   bash setup-zsh.sh         # macOS (no sudo needed for Homebrew)
 #
 # WHAT IT DOES:
-#   1. Detects system type (Bazzite/Fedora Atomic/Ubuntu/Fedora)
+#   1. Detects system type (Bazzite/Fedora Atomic/Ubuntu/Fedora/macOS)
 #   2. Installs zsh
 #   3. Installs Oh My Zsh
 #   4. Installs zsh plugins (zsh-autosuggestions, zsh-syntax-highlighting)
@@ -25,20 +27,30 @@
 #   - Only installs/configures what is missing
 #
 
-# Check if running as root
-if [ "$EUID" -ne 0 ]; then
-  echo "Error: This script must be run with sudo"
+# Check if running as root (not needed for macOS)
+if [ "$(uname)" != "Darwin" ] && [ "$EUID" -ne 0 ]; then
+  echo "Error: This script must be run with sudo on Linux systems"
   exit 1
 fi
 
 # Get the actual user (not root)
-ACTUAL_USER=${SUDO_USER:-$USER}
-ACTUAL_HOME=$(eval echo ~$ACTUAL_USER)
+if [ "$(uname)" = "Darwin" ]; then
+  # macOS - use current user
+  ACTUAL_USER=$USER
+  ACTUAL_HOME=$HOME
+else
+  # Linux - get user from sudo
+  ACTUAL_USER=${SUDO_USER:-$USER}
+  ACTUAL_HOME=$(eval echo ~$ACTUAL_USER)
+fi
 
 echo "$(tput setaf 3)Zsh Setup: Starting configuration for user $ACTUAL_USER...$(tput sgr0)"
 
 # Detect system type
-if command -v rpm-ostree &> /dev/null; then
+if [ "$(uname)" = "Darwin" ]; then
+  SYSTEM_TYPE="macos"
+  echo "$(tput setaf 3)Detected macOS system$(tput sgr0)"
+elif command -v rpm-ostree &> /dev/null; then
   SYSTEM_TYPE="atomic"
   echo "$(tput setaf 3)Detected immutable system (Bazzite/Fedora Atomic)$(tput sgr0)"
 elif command -v apt &> /dev/null; then
@@ -55,7 +67,42 @@ fi
 # Install zsh based on system type
 echo "$(tput setaf 3)Installing zsh and related packages...$(tput sgr0)"
 
-if [ "$SYSTEM_TYPE" = "atomic" ]; then
+if [ "$SYSTEM_TYPE" = "macos" ]; then
+  # macOS - use Homebrew
+  
+  # Check if Homebrew is installed
+  if ! command -v brew &> /dev/null; then
+    echo "$(tput setaf 3)Homebrew not found. Installing Homebrew...$(tput sgr0)"
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+    
+    # Add Homebrew to PATH for Apple Silicon Macs
+    if [ -f "/opt/homebrew/bin/brew" ]; then
+      eval "$(/opt/homebrew/bin/brew shellenv)"
+    fi
+  else
+    echo "Homebrew already installed"
+  fi
+  
+  # Install packages via Homebrew
+  BREW_PACKAGES=(lsd fzf tldr atuin)
+  for pkg in "${BREW_PACKAGES[@]}"; do
+    if ! brew list $pkg &> /dev/null; then
+      echo "Installing $pkg..."
+      brew install $pkg
+    else
+      echo "$pkg already installed"
+    fi
+  done
+  
+  # zsh comes pre-installed on modern macOS
+  if ! command -v zsh &> /dev/null; then
+    echo "Installing zsh..."
+    brew install zsh
+  else
+    echo "zsh already installed"
+  fi
+  
+elif [ "$SYSTEM_TYPE" = "atomic" ]; then
   # Check if packages need to be installed
   PACKAGES_NEEDED=()
   
@@ -217,7 +264,9 @@ if [ -d "$ACTUAL_HOME/.oh-my-zsh" ]; then
       echo '' >> "$ACTUAL_HOME/.zshrc"
       echo '# Atuin - magical shell history' >> "$ACTUAL_HOME/.zshrc"
       echo 'eval "$(atuin init zsh)"' >> "$ACTUAL_HOME/.zshrc"
-      chown $ACTUAL_USER:$ACTUAL_USER "$ACTUAL_HOME/.zshrc"
+      if [ "$SYSTEM_TYPE" != "macos" ]; then
+        chown $ACTUAL_USER:$ACTUAL_USER "$ACTUAL_HOME/.zshrc"
+      fi
       echo "Atuin initialized in .zshrc"
     else
       echo "Atuin already initialized in .zshrc"
@@ -226,17 +275,34 @@ if [ -d "$ACTUAL_HOME/.oh-my-zsh" ]; then
 fi
 
 # Set zsh as default shell if not already set
-CURRENT_SHELL=$(getent passwd $ACTUAL_USER | cut -d: -f7)
-if [ "$CURRENT_SHELL" != "/usr/bin/zsh" ] && [ "$CURRENT_SHELL" != "/bin/zsh" ]; then
-  echo "$(tput setaf 3)Changing default shell to zsh for $ACTUAL_USER...$(tput sgr0)"
-  chsh -s $(which zsh) $ACTUAL_USER
-  if [ $? -eq 0 ]; then
-    echo "Default shell changed to zsh for $ACTUAL_USER"
+if [ "$SYSTEM_TYPE" = "macos" ]; then
+  # macOS - use dscl to check current shell
+  CURRENT_SHELL=$(dscl . -read /Users/$ACTUAL_USER UserShell | awk '{print $2}')
+  if [ "$CURRENT_SHELL" != "/bin/zsh" ] && [ "$CURRENT_SHELL" != "/usr/local/bin/zsh" ] && [ "$CURRENT_SHELL" != "/opt/homebrew/bin/zsh" ]; then
+    echo "$(tput setaf 3)Changing default shell to zsh for $ACTUAL_USER...$(tput sgr0)"
+    chsh -s $(which zsh)
+    if [ $? -eq 0 ]; then
+      echo "Default shell changed to zsh for $ACTUAL_USER"
+    else
+      echo "Warning: Failed to change default shell to zsh"
+    fi
   else
-    echo "Warning: Failed to change default shell to zsh"
+    echo "Default shell is already zsh for $ACTUAL_USER"
   fi
 else
-  echo "Default shell is already zsh for $ACTUAL_USER"
+  # Linux - use getent
+  CURRENT_SHELL=$(getent passwd $ACTUAL_USER | cut -d: -f7)
+  if [ "$CURRENT_SHELL" != "/usr/bin/zsh" ] && [ "$CURRENT_SHELL" != "/bin/zsh" ]; then
+    echo "$(tput setaf 3)Changing default shell to zsh for $ACTUAL_USER...$(tput sgr0)"
+    chsh -s $(which zsh) $ACTUAL_USER
+    if [ $? -eq 0 ]; then
+      echo "Default shell changed to zsh for $ACTUAL_USER"
+    else
+      echo "Warning: Failed to change default shell to zsh"
+    fi
+  else
+    echo "Default shell is already zsh for $ACTUAL_USER"
+  fi
 fi
 
 echo ""

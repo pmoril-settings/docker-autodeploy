@@ -38,19 +38,24 @@ Standalone script to configure zsh with Oh My Zsh, plugins, LSD, and Atuin. Can 
 
 **Usage:**
 ```bash
-# Download and execute from GitHub
+# Download and execute from GitHub (Linux)
 sudo bash -c "$(wget -O- https://raw.githubusercontent.com/pmoril-settings/docker-autodeploy/master/setup-zsh.sh)"
 
-# Or using curl
+# Or using curl (Linux)
 sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/pmoril-settings/docker-autodeploy/master/setup-zsh.sh)"
 
+# macOS (no sudo needed)
+bash -c "$(curl -fsSL https://raw.githubusercontent.com/pmoril-settings/docker-autodeploy/master/setup-zsh.sh)"
+
 # Or if you have the script locally
-sudo bash setup-zsh.sh
+sudo bash setup-zsh.sh  # Linux
+bash setup-zsh.sh       # macOS
 ```
 
 **Supported systems:**
-- Bazzite / Fedora Atomic
-- Debian / Ubuntu
-- Fedora / RHEL
+- 🐧 Bazzite / Fedora Atomic
+- 🐧 Debian / Ubuntu
+- 🐧 Fedora / RHEL
+- 🍎 macOS (via Homebrew)
 
 **Note:** The script is idempotent - safe to run multiple times.
