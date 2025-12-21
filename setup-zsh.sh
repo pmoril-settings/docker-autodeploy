@@ -306,7 +306,7 @@ else
 fi
 
 echo ""
-echo "$(tput setaf 2)========================================"$(tput sgr0)"
+echo "$(tput setaf 2)========================================$(tput sgr0)"
 echo "$(tput setaf 2)Zsh setup completed successfully!$(tput sgr0)"
 echo "$(tput setaf 2)========================================$(tput sgr0)"
 echo ""
