@@ -316,7 +316,7 @@ echo "  ✓ Oh My Zsh framework"
 echo "  ✓ zsh-autosuggestions plugin"
 echo "  ✓ zsh-syntax-highlighting plugin"
 if command -v lsd &> /dev/null; then
-  echo "  ✓ LSD (LSDeluxe) - modern ls replacement"
+  echo "  ✓ LSD \(LSDeluxe\) - modern ls replacement"
 fi
 if command -v fzf &> /dev/null; then
   echo "  ✓ fzf - command-line fuzzy finder"
